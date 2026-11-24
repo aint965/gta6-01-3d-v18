@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Palkon Auto — Solmar</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0a0e18;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hud { position: fixed; color: #f4ead2; text-shadow: 0 1px 3px rgba(0,0,0,.8); z-index: 5;
+    pointer-events: none; user-select: none; }
+  #title { top: 14px; left: 16px; }
+  #title .game { font-size: 30px; font-weight: 800; letter-spacing: 3px; }
+  #title .game span { color: #e0785a; }
+  #title .district { font-size: 15px; margin-top: 2px; color: #ffe9b0; }
+  #title .tagline { font-size: 12px; opacity: .85; font-style: italic; }
+  #title .standing { font-size: 12px; margin-top: 3px; }
+  #title .standing .bar { display: inline-block; width: 110px; height: 7px; background: rgba(255,255,255,.25);
+    border-radius: 4px; vertical-align: middle; margin-left: 6px; overflow: hidden; }
+  #title .standing .bar i { display: block; height: 100%; background: #f2c200; }
+  #compass { top: 12px; left: 50%; transform: translateX(-50%); font-size: 14px; letter-spacing: 2px;
+    background: rgba(10,14,24,.45); padding: 5px 14px; border-radius: 14px; }
+  #compass b { color: #f2c200; }
+  #preset { top: 46px; left: 50%; transform: translateX(-50%); font-size: 12px; opacity: .9;
+    background: rgba(10,14,24,.4); padding: 3px 10px; border-radius: 10px; }
+  #minimap { position: fixed; right: 14px; bottom: 14px; z-index: 5; border: 2px solid rgba(244,234,210,.5);
+    border-radius: 6px; background: rgba(10,14,24,.6); }
+  #speedo { right: 16px; bottom: 270px; text-align: right; }
+  #speedo .num { font-size: 44px; font-weight: 800; line-height: 1; }
+  #speedo .unit { font-size: 13px; opacity: .85; }
+  #controls { bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 13px;
+    background: rgba(10,14,24,.55); padding: 6px 14px; border-radius: 12px; white-space: nowrap; }
+  #controls b { color: #f2c200; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #f4ead2; font-size: 20px; letter-spacing: 2px; z-index: 10; background: #0a0e18; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="loading">PALKON AUTO — loading Solmar…</div>
+<div class="hud" id="title">
+  <div class="game">PALKON <span>AUTO</span></div>
+  <div class="district" id="district">Solmar</div>
+  <div class="tagline" id="tagline"></div>
+  <div class="standing" id="standing"></div>
+</div>
+<div class="hud" id="compass">N</div>
+<div class="hud" id="preset"></div>
+<canvas id="minimap" width="260" height="234"></canvas>
+<div class="hud" id="speedo"><div class="num">0</div><div class="unit">km/h</div></div>
+<div class="hud" id="controls"><b>WASD</b> move &nbsp;·&nbsp; <b>drag</b> look &nbsp;·&nbsp; <b>1 / 2 / 3</b> or <b>T</b> lighting &nbsp;·&nbsp; <b>Q</b> collect &nbsp;·&nbsp; <b>E</b> enter car</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
