@@ -564,41 +564,221 @@ export function buildStaticMesh(city) {
   return { mesh: B.build(), builder: B };
 }
 
+// One car into a Builder (shared by the static car mesh and the per-frame
+// dynamic mesh). Forward is (sin yaw, -cos yaw); the mesh 'back' face
+// (local -Z) points forward, so headlights go there and tail lights on
+// the 'front' face (local +Z, the rear).
+function addCarMesh(B, car) {
+  const col = [parseInt(car.color.slice(1, 3), 16) / 255, parseInt(car.color.slice(3, 5), 16) / 255, parseInt(car.color.slice(5, 7), 16) / 255];
+  // body
+  B.box(car.x, 0.75, car.z, 4.4, 0.9, 2.0, car.yaw, {
+    top: { c: shade(col, 1.1), s: 0.5 }, bottom: { c: [0.08, 0.08, 0.08] },
+    front: { c: col, s: 0.5 }, back: { c: shade(col, 0.85), s: 0.5 },
+    left: { c: shade(col, 0.9), s: 0.5 }, right: { c: shade(col, 0.95), s: 0.5 },
+  }, ['bottom']);
+  // cabin + windshield
+  B.box(car.x, 1.5, car.z, 2.2, 0.7, 1.8, car.yaw, {
+    top: { c: shade(col, 1.05), s: 0.6 }, bottom: { c: [0.08, 0.08, 0.08] },
+    front: { c: [0.08, 0.1, 0.13], s: 0.9 }, back: { c: [0.08, 0.1, 0.13], s: 0.9 },
+    left: { c: [0.1, 0.12, 0.15], s: 0.9 }, right: { c: [0.1, 0.12, 0.15], s: 0.9 },
+  }, ['bottom']);
+  // axle / wheels as one dark slab
+  B.box(car.x, 0.35, car.z, 4.0, 0.7, 2.1, car.yaw, {
+    top: { c: [0.08, 0.08, 0.08] }, bottom: { c: [0.05, 0.05, 0.05] },
+    front: { c: [0.07, 0.07, 0.07] }, back: { c: [0.07, 0.07, 0.07] },
+    left: { c: [0.07, 0.07, 0.07] }, right: { c: [0.07, 0.07, 0.07] },
+  }, ['bottom']);
+  // tail lights (emissive red, rear = local +Z — the mesh 'front'
+  // face points backward, see the headlight note below)
+  const fr = faceFrame({ x: car.x, z: car.z, w: 4.4, d: 2.0, yaw: car.yaw }, 'front');
+  const pt = (uu, vv, oo) => [
+    fr.o[0] + fr.u[0] * uu + fr.v[0] * vv + fr.n[0] * oo,
+    fr.o[1] + fr.u[1] * uu + fr.v[1] * vv + fr.n[1] * oo,
+    fr.o[2] + fr.u[2] * uu + fr.v[2] * vv + fr.n[2] * oo,
+  ];
+  B.quad(pt(-1.6, 0.75, 0.06), pt(-0.9, 0.75, 0.06), pt(-0.9, 1.05, 0.06), pt(-1.6, 1.05, 0.06),
+    { c: [0.6, 0.05, 0.05], e: [0.9, 0.08, 0.06] });
+  B.quad(pt(0.9, 0.75, 0.06), pt(1.6, 0.75, 0.06), pt(1.6, 1.05, 0.06), pt(0.9, 1.05, 0.06),
+    { c: [0.6, 0.05, 0.05], e: [0.9, 0.08, 0.06] });
+  // headlights (warm white lenses, front = local -Z — the mesh 'back'
+  // face points along the car's forward. They glow at night via
+  // uEmisBoost and stay dim in daylight.)
+  const fh = faceFrame({ x: car.x, z: car.z, w: 4.4, d: 2.0, yaw: car.yaw }, 'back');
+  const hp = (uu, vv, oo) => [
+    fh.o[0] + fh.u[0] * uu + fh.v[0] * vv + fh.n[0] * oo,
+    fh.o[1] + fh.u[1] * uu + fh.v[1] * vv + fh.n[1] * oo,
+    fh.o[2] + fh.u[2] * uu + fh.v[2] * vv + fh.n[2] * oo,
+  ];
+  B.quad(hp(-1.6, 0.75, 0.06), hp(-0.9, 0.75, 0.06), hp(-0.9, 1.05, 0.06), hp(-1.6, 1.05, 0.06),
+    { c: [0.9, 0.85, 0.6], e: [1.0, 0.9, 0.55] });
+  B.quad(hp(0.9, 0.75, 0.06), hp(1.6, 0.75, 0.06), hp(1.6, 1.05, 0.06), hp(0.9, 1.05, 0.06),
+    { c: [0.9, 0.85, 0.6], e: [1.0, 0.9, 0.55] });
+  // drivable cars read at a glance: a small gold roof marker so the
+  // player never wastes a try on a locked parked car
+  if (car.kind === 'drivable') {
+    B.box(car.x, 2.05, car.z, 0.9, 0.22, 0.9, car.yaw, {
+      top: { c: [0.95, 0.76, 0.2], e: [0.9, 0.65, 0.1] }, bottom: { c: [0.2, 0.16, 0.05] },
+      front: { c: [0.85, 0.66, 0.15], e: [0.7, 0.5, 0.08] }, back: { c: [0.85, 0.66, 0.15], e: [0.7, 0.5, 0.08] },
+      left: { c: [0.85, 0.66, 0.15], e: [0.7, 0.5, 0.08] }, right: { c: [0.85, 0.66, 0.15], e: [0.7, 0.5, 0.08] },
+    }, ['bottom']);
+  }
+}
+
 // Cars: one dynamic buffer, ALL cars (parked + drivable + traffic) in one pass.
 export function buildCarMesh(cars) {
   const B = new Builder();
-  for (const car of cars) {
-    const col = [parseInt(car.color.slice(1, 3), 16) / 255, parseInt(car.color.slice(3, 5), 16) / 255, parseInt(car.color.slice(5, 7), 16) / 255];
-    // body
-    B.box(car.x, 0.75, car.z, 4.4, 0.9, 2.0, car.yaw, {
-      top: { c: shade(col, 1.1), s: 0.5 }, bottom: { c: [0.08, 0.08, 0.08] },
-      front: { c: col, s: 0.5 }, back: { c: shade(col, 0.85), s: 0.5 },
-      left: { c: shade(col, 0.9), s: 0.5 }, right: { c: shade(col, 0.95), s: 0.5 },
-    }, ['bottom']);
-    // cabin + windshield
-    B.box(car.x, 1.5, car.z, 2.2, 0.7, 1.8, car.yaw, {
-      top: { c: shade(col, 1.05), s: 0.6 }, bottom: { c: [0.08, 0.08, 0.08] },
-      front: { c: [0.08, 0.1, 0.13], s: 0.9 }, back: { c: [0.08, 0.1, 0.13], s: 0.9 },
-      left: { c: [0.1, 0.12, 0.15], s: 0.9 }, right: { c: [0.1, 0.12, 0.15], s: 0.9 },
-    }, ['bottom']);
-    // axle / wheels as one dark slab
-    B.box(car.x, 0.35, car.z, 4.0, 0.7, 2.1, car.yaw, {
-      top: { c: [0.08, 0.08, 0.08] }, bottom: { c: [0.05, 0.05, 0.05] },
-      front: { c: [0.07, 0.07, 0.07] }, back: { c: [0.07, 0.07, 0.07] },
-      left: { c: [0.07, 0.07, 0.07] }, right: { c: [0.07, 0.07, 0.07] },
-    }, ['bottom']);
-    // tail lights (emissive red, rear = local -Z)
-    const fr = faceFrame({ x: car.x, z: car.z, w: 4.4, d: 2.0, yaw: car.yaw }, 'back');
-    const pt = (uu, vv, oo) => [
-      fr.o[0] + fr.u[0] * uu + fr.v[0] * vv + fr.n[0] * oo,
-      fr.o[1] + fr.u[1] * uu + fr.v[1] * vv + fr.n[1] * oo,
-      fr.o[2] + fr.u[2] * uu + fr.v[2] * vv + fr.n[2] * oo,
-    ];
-    B.quad(pt(-1.6, 0.75, 0.06), pt(-0.9, 0.75, 0.06), pt(-0.9, 1.05, 0.06), pt(-1.6, 1.05, 0.06),
-      { c: [0.6, 0.05, 0.05], e: [0.9, 0.08, 0.06] });
-    B.quad(pt(0.9, 0.75, 0.06), pt(1.6, 0.75, 0.06), pt(1.6, 1.05, 0.06), pt(0.9, 1.05, 0.06),
-      { c: [0.6, 0.05, 0.05], e: [0.9, 0.08, 0.06] });
+  for (const car of cars) addCarMesh(B, car);
+  return B.build();
+}
+
+// Headlight beam (Stage B): a smooth gradient cone + a ground light pool,
+// rebuilt per frame from the driven car. Both use spc -2 (the beam branch
+// of the shader, additive). NO stacked discs/billboards — the cone is one
+// continuous tube whose alpha is a smooth function of distance along the
+// beam (vUv.x = t, 0 at the car, 1 at the far end) and the view angle, and
+// the pool's alpha is a smooth function of t and the lateral offset
+// (vUv.y = -1..1 across the pool). There are no discrete rings to see.
+// head = {x, z, yaw, intensity} — intensity scales with the preset
+// (night 1.0, sunset 0.45, midday 0.12: nearly invisible in daylight).
+export function buildBeamMesh(head, markers) {
+  const B = new Builder();
+  // marker beams: tall translucent columns (spc -2, additive), one per
+  // marker — same beam branch as the headlight, alpha fading with height
+  for (const m of markers || []) {
+    const col = m.color;
+    const H = 26, W = 1.1;
+    for (let s = 0; s < 4; s++) {
+      const a0 = (s / 4) * Math.PI * 2 + Math.PI / 4;
+      const a1 = ((s + 1) / 4) * Math.PI * 2 + Math.PI / 4;
+      const p = (a, y) => [m.x + Math.cos(a) * W, y, m.z + Math.sin(a) * W];
+      B.quad(p(a0, 0.2), p(a1, 0.2), p(a1, H), p(a0, H), {
+        c: col, e: col, s: -2,
+        uv: [[0, 0], [0, 0], [1, 0], [1, 0]],
+      });
+    }
   }
+  if (!head || head.intensity <= 0.01) return B.build();
+  const fwd = [Math.sin(head.yaw), -Math.cos(head.yaw)];
+  const right = [Math.cos(head.yaw), Math.sin(head.yaw)];
+  const BEAM = [1.0, 0.93, 0.72];
+  const emi = [BEAM[0] * head.intensity, BEAM[1] * head.intensity, BEAM[2] * head.intensity];
+  const LEN = 30, RINGS = 10, SEGS = 10;
+  // --- ground light pool: a trapezoid on the road, y just above the asphalt,
+  // widening from 2 m at the bumper to 13 m at 30 m. Subdivided along its
+  // length so the t-falloff is smooth, not one flat quad.
+  const poolY = 0.14;
+  for (let i = 0; i < RINGS; i++) {
+    const t0 = i / RINGS, t1 = (i + 1) / RINGS;
+    const d0 = t0 * LEN, d1 = t1 * LEN;
+    const w0 = 1 + t0 * 5.5, w1 = 1 + t1 * 5.5;
+    const c0 = [head.x + fwd[0] * d0, poolY, head.z + fwd[1] * d0];
+    const c1 = [head.x + fwd[0] * d1, poolY, head.z + fwd[1] * d1];
+    const a = [c0[0] - right[0] * w0, poolY, c0[2] - right[2] * w0];
+    const b = [c0[0] + right[0] * w0, poolY, c0[2] + right[2] * w0];
+    const c = [c1[0] + right[0] * w1, poolY, c1[2] + right[2] * w1];
+    const d = [c1[0] - right[0] * w1, poolY, c1[2] - right[2] * w1];
+    // uv.x = t (0 at the car), uv.y = lateral (-1 left edge .. 1 right edge)
+    B.quad(a, b, c, d, {
+      c: BEAM, e: emi, s: -2,
+      uv: [[t0, -1], [t0, 1], [t1, 1], [t1, -1]],
+    });
+  }
+  // --- volumetric cone: a tube of elliptical rings along the beam axis.
+  // The axis stays at headlight height (y 0.85); the cone grows so its
+  // lower edge meets the road a few metres out and its upper edge clears
+  // a car roof 10 m ahead. One continuous surface, no discs.
+  const rings = [];
+  for (let i = 0; i <= RINGS; i++) {
+    const t = i / RINGS;
+    const d = 2 + t * (LEN - 2);
+    const hw = 0.9 + t * 5.2;
+    const hh = 0.45 + t * 2.1;
+    const cx = head.x + fwd[0] * d, cz = head.z + fwd[1] * d;
+    const pts = [];
+    for (let j = 0; j < SEGS; j++) {
+      const a = (j / SEGS) * Math.PI * 2;
+      pts.push([
+        cx + right[0] * Math.cos(a) * hw,
+        0.85 + Math.sin(a) * hh,
+        cz + right[2] * Math.cos(a) * hw,
+      ]);
+    }
+    rings.push({ pts, t });
+  }
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SEGS; j++) {
+      const j1 = (j + 1) % SEGS;
+      const a = rings[i].pts[j], b = rings[i].pts[j1];
+      const c = rings[i + 1].pts[j1], d = rings[i + 1].pts[j];
+      B.quad(a, b, c, d, {
+        c: BEAM, e: emi, s: -2,
+        uv: [[rings[i].t, 0], [rings[i].t, 0], [rings[i + 1].t, 0], [rings[i + 1].t, 0]],
+      });
+    }
+  }
+  return B.build();
+}
+
+// Mission / safehouse world markers + the E interaction radius ring.
+// marker = {x, z, color, kind:'mission'|'safehouse'} — the floating
+// diamond (opaque, emissive) sits above the target; the tall beam column
+// for each marker is built by buildBeamMesh (additive pass). Mission
+// yellow, safehouse pink — they never share one look.
+// The E ring is a flat annulus on the ground around the near car (the
+// 7 m interaction radius), so the player sees exactly how close to stand.
+export function buildMarkerMesh(markers, eRing) {
+  const B = new Builder();
+  for (const m of markers || []) {
+    const col = m.color;
+    const emi = [col[0], col[1], col[2]];
+    // floating diamond (two pyramids) above the target, bobbing is done
+    // by the caller passing a y offset in m.y
+    const y = m.y || 9;
+    B.pyramid(m.x, y - 1.2, m.z, 2.2, 1.2, 2.2, 0.6, col, emi);
+    B.pyramid(m.x, y + 1.2, m.z, 2.2, -1.2, 2.2, 0.6, col, emi);
+    // ground ring under the target
+    B.disc(m.x, 0.18, m.z, 3.2, 20, [0.05, 0.05, 0.05], [col[0] * 0.7, col[1] * 0.7, col[2] * 0.7]);
+  }
+  if (eRing) {
+    // annulus: 24 segments, inner r 6.4, outer r 7.0, flat on the ground
+    const segs = 24, r0 = 6.4, r1 = 7.0, y = 0.16;
+    const col = [1.0, 0.85, 0.2];
+    for (let i = 0; i < segs; i++) {
+      const a0 = (i / segs) * Math.PI * 2;
+      const a1 = ((i + 1) / segs) * Math.PI * 2;
+      B.quad(
+        [eRing.x + Math.cos(a0) * r0, y, eRing.z + Math.sin(a0) * r0],
+        [eRing.x + Math.cos(a0) * r1, y, eRing.z + Math.sin(a0) * r1],
+        [eRing.x + Math.cos(a1) * r1, y, eRing.z + Math.sin(a1) * r1],
+        [eRing.x + Math.cos(a1) * r0, y, eRing.z + Math.sin(a1) * r0],
+        { c: col, e: [0.9, 0.7, 0.1], s: 0 },
+      );
+    }
+  }
+  return B.build();
+}
+
+// Mara on foot: coral jacket, dark trousers, skin head — distinct from the
+// sidewalk pedestrians so the player always finds her.
+export function buildMaraMesh(mara) {
+  const B = new Builder();
+  if (!mara) return B.build();
+  const J = [0.85, 0.35, 0.3];
+  B.box(mara.x, 1.05, mara.z, 0.6, 1.1, 0.4, mara.yaw, {
+    top: { c: J }, bottom: { c: [0.15, 0.15, 0.15] },
+    front: { c: J }, back: { c: shade(J, 0.85) },
+    left: { c: shade(J, 0.9) }, right: { c: shade(J, 0.92) },
+  }, ['bottom']);
+  B.box(mara.x, 1.85, mara.z, 0.36, 0.38, 0.36, mara.yaw, {
+    top: { c: [0.85, 0.68, 0.52] }, bottom: { c: [0.4, 0.3, 0.22] },
+    front: { c: [0.82, 0.65, 0.5] }, back: { c: [0.78, 0.62, 0.48] },
+    left: { c: [0.8, 0.64, 0.49] }, right: { c: [0.81, 0.64, 0.49] },
+  }, ['bottom']);
+  B.box(mara.x, 0.35, mara.z, 0.55, 0.7, 0.36, mara.yaw, {
+    top: { c: [0.2, 0.2, 0.22] }, bottom: { c: [0.1, 0.1, 0.1] },
+    front: { c: [0.18, 0.18, 0.2] }, back: { c: [0.18, 0.18, 0.2] },
+    left: { c: [0.18, 0.18, 0.2] }, right: { c: [0.18, 0.18, 0.2] },
+  }, ['bottom']);
   return B.build();
 }
 

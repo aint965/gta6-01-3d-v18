@@ -425,7 +425,10 @@ export function buildCity(seed = SEED) {
   for (const sx of [960, 2880]) {
     for (let z = 300; z < WORLD.h; z += 260) {
       if (z > CANAL.z0 - 50 && z < CANAL.z1 + 50) continue;
-      addCar(sx - 11, z, 0, 'parked', pick(rnd, CAR_COLORS));
+      // parked at the kerb: 12 m off the street centre clears the
+      // driving lane (at 7 m) by 5 m — more than the 4.4 m two cars
+      // span side by side, so a car in the lane never overlaps one
+      addCar(sx - 12, z, 0, 'parked', pick(rnd, CAR_COLORS));
     }
   }
   for (let i = 0; i < 8; i++) { // drivable, near spawn on the boulevard
